@@ -1,33 +1,34 @@
 import './style.css'
-
-import ArcGISMap from '@arcgis/core/Map';
-import Basemap from '@arcgis/core/Basemap';
-import VectorTileLayer from '@arcgis/core/layers/VectorTileLayer';
 import MapView from '@arcgis/core/views/MapView';
+import Map from "@arcgis/core/Map";
+import SpatialReference from "@arcgis/core/geometry/SpatialReference";
+import Extent from "@arcgis/core/geometry/Extent";
+import PreviousNextExtentWidget from './PreviousNextExtentWidget/PreviousNextExtentWidget';
 
-import Recenter from './widget';
-
-const tileLayer = new VectorTileLayer({
-  url:
-    "https://www.arcgis.com/sharing/rest/content/items/92c551c9f07b4147846aae273e822714/resources/styles/root.json"
+const map = new Map({
+  basemap: 'dark-gray-vector'
 });
 
-const basemap = new Basemap ({baseLayers: [ tileLayer ]});
-
-const map = new ArcGISMap({
-  basemap
+const initialExtent = new Extent({
+  xmax: -13004943.9076154,
+  xmin: -13887262.57174876,
+  ymax: 6280051.69664734,
+  ymin: 5700907.786141661,
+  spatialReference: new SpatialReference({wkid: 102100})
 });
 
 const view = new MapView({
   container: "viewDiv",
   map: map,
-  center: [-100.33, 43.69],
-  zoom: 4
+  extent: initialExtent,
 });
+
+const prevNext = new PreviousNextExtentWidget({
+  view: view
+});
+
 view.when(() => {
-  const hello = new Recenter({
-    view,
-    initialCenter: [-100.33, 43.69]
-  });
-  view.ui.add(hello, "top-right");
+  console.log(view);
+
+  view.ui.add(prevNext, "top-right");
 });
