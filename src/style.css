@@ -8,30 +8,10 @@ body,
   width: 100%;
   background: rgba(55, 50, 50);
 }
-#infoDiv {
-  position: absolute;
-  z-index: 70;
-  top: 0px;
-  right: 0;
-  bottom: 0;
-  box-sizing: border-box;
-  padding: 10px;
-  height: 100%;
-  width: 40%;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  font-size: 14px;
-  line-height: 30px;
-  overflow: auto;
-}
-#infoDiv span {
-  color: #f7be81;
-  font-weight: bold;
-}
 .previous-next-extent-widget {
   position: absolute;
-  /* top: 130px;
-  left: 15px; */
+  top: 130px;
+  left: 15px;
   cursor: default;
   display: flex;
   flex-direction: column;
