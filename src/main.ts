@@ -28,7 +28,5 @@ const prevNext = new PreviousNextExtentWidget({
 });
 
 view.when(() => {
-  console.log(view);
-
   view.ui.add(prevNext, "top-right");
 });

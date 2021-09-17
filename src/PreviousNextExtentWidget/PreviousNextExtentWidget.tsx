@@ -1,6 +1,6 @@
 import { subclass, property } from "@arcgis/core/core/accessorSupport/decorators";
 import Widget from "@arcgis/core/widgets/Widget";
-import { once, watch, when, whenOnce, whenTrue, whenTrueOnce } from "@arcgis/core/core/watchUtils";
+import { whenTrue, whenTrueOnce } from "@arcgis/core/core/watchUtils";
 import { tsx } from "@arcgis/core/widgets/support/widget";
 
 import MapView from "@arcgis/core/views/MapView";
@@ -21,12 +21,9 @@ class PreviousNextExtentWidget extends Widget {
   }
 
   postInitialize() {
-    console.log("postInitialize PreviousNextExtentWidget");
+    // console.log("widget = ", this);
     whenTrueOnce(this, "renderedOnce", () => {
-      console.log("in whenTrueOnce");
       this._attachHandleStationary();
-      this._attachHandleNavigating();
-      this._attachHandleZoom();
       this._addClickListeners();
     });
   }
@@ -51,28 +48,73 @@ class PreviousNextExtentWidget extends Widget {
   @property()
   renderedOnce: boolean = false;
 
+  @property()
+  poppedExtent: any = {
+    xmin: undefined,
+    xmax: undefined,
+    ymin: undefined,
+    ymax: undefined
+  }
+
+  @property()
+  lastExtent: any = {
+    xmin: undefined,
+    xmax: undefined,
+    ymin: undefined,
+    ymax: undefined
+  }
+
+  @property()
+  previousButtonClicked: boolean = false;
+
   //-------------------------------------------------------------------
   //  Public methods
   //-------------------------------------------------------------------
 
   render() {
-    console.log("rendered");
     this.renderedOnce = true;
+    let activeClasses = "esri-widget--button esri-interactive";
+    let disabledClasses = activeClasses + " esri-disabled";
+
     return (
       <div class={this.classes(CSS.base)}>
-        <button id="previousExtent" class="esri-widget--button esri-interactive esri-icon-left-arrow"
-        title="Previous extent"></button>
-        <button id="nextExtent" class="esri-widget--button esri-interactive esri-icon-right-arrow"
-          title="Next extent"></button>
+        <button id="previousExtent" class={this.extentQueue.length > 1 ? activeClasses : disabledClasses}
+        title="Previous extent"><span class="esri-icon-left-arrow"></span></button>
+        <button id="nextExtent" class={this.nextQueue.length > 0 ? activeClasses : disabledClasses}
+          title="Next extent"><span class="esri-icon-right-arrow"></span></button>
       </div>
     );
   }
 
   gotoPreviousExtent() {
-    console.log("gotoPreviousExtent");
     if (this.extentQueue.length > 1) {
-      this.nextQueue.push(this.extentQueue.pop());
+      // popped var is going to be the extent that is
+      // pushed to the nextQueue, and also the one used to
+      // compare new extent with to decide whether to dump the
+      // current nextQueue items if the user pans/zooms during
+      // the course of navigation using the prev/next buttons
+      let popped = this.extentQueue.pop();
+      let beforeExtent = this.extentQueue[this.extentQueue.length - 1];
+      if (popped) {
+        this.poppedExtent = {
+          xmin: popped.xmin,
+          xmax: popped.xmax,
+          ymin: popped.ymin,
+          ymax: popped.ymax
+        }
+      }
+      if (beforeExtent) {
+        this.lastExtent = {
+          xmin: beforeExtent.xmin,
+          xmax: beforeExtent.xmax,
+          ymin: beforeExtent.ymin,
+          ymax: beforeExtent.ymax
+        }
+      }
+
+      this.nextQueue.push(popped);
       this.view.goTo(this.extentQueue[this.extentQueue.length - 1]).then( () => {
+        // manage the extentQueue, the stationary handler will fire after the goTo
         if (this.extentQueue.length > 0) {
           this.extentQueue.pop();
         }
@@ -81,7 +123,6 @@ class PreviousNextExtentWidget extends Widget {
   }
 
   gotoNextExtent() {
-    console.log("gotoNextExtent");
     if (this.nextQueue.length > 0) {
       let popped = this.nextQueue.pop();
       this.view.goTo(popped);
@@ -93,78 +134,48 @@ class PreviousNextExtentWidget extends Widget {
   //-------------------------------------------------------------------
 
   private _stationaryHandler(mapView: MapView) {
-    console.log("_stationaryHandler", mapView);
-    this.extentQueue.push(mapView.extent.clone());
-    console.log("extentQueue: ", this.extentQueue.length);
-    console.log("nextQueue: ", this.nextQueue.length);
+
+    this._compareExtentToPopped();
+    this.extentQueue.push(mapView.extent.clone());;
+    // this._debugQueues()
   }
 
-  private _attachHandleStationary(callback?: Function ) {
+  private _attachHandleStationary() {
     whenTrue(this.view, "stationary", () => {
-      console.log("stationary true");
       this._stationaryHandler(this.view);
     });
-    if (callback) {
-      callback();
-    }
   }
 
-  private _navigatingHandler(mapView: MapView) {
-    console.log("_navigatingHandler");
-    this._zoomOrNavigateControlNextQueue();
-  }
-
-  private _attachHandleNavigating(callback?: Function) {
-    whenTrue(this.view, "navigating", () => {
-      this._navigatingHandler(this.view);
-    });
-    if (callback) {
-      callback();
-    }
-  }
-
-  private _zoomHandler(mapView: MapView) {
-    console.log("__centerHandler ");
-    this._zoomOrNavigateControlNextQueue()
-  }
-
-  private _attachHandleZoom(callback?: Function) {
-    once(this.view, "zoom", () => {
-      when(this.view, "stationary", () => {
-        console.log(this.view.zoom);
-        this._zoomHandler(this.view);
-        if (callback) {
-          callback();
-        }
-      });
-    });
-  }
-
-  private _zoomOrNavigateControlNextQueue() {
-    console.log("_zoomOrNavigateControlNextQueue");
-    if (this.extentQueue.length > 1 && this.nextQueue.length > 0) {
-      console.log("******* hit **********");
-      this.nextQueue = [];
-      console.log("nextQueue length: ", this.nextQueue.length);
+  private _compareExtentToPopped() {
+    if (this.nextQueue.length > 0 && this.poppedExtent.xmin && this.lastExtent.xmin) {
+      // if the extent is the next or the last it must be a new one, remove all
+      // items from nextQueue
+      if (( this.view.extent.xmin !== this.poppedExtent.xmin &&
+            this.view.extent.ymin !== this.poppedExtent.ymin &&
+            this.view.extent.xmax !== this.poppedExtent.xmax &&
+            this.view.extent.ymax !== this.poppedExtent.ymax )
+            && (
+            this.view.extent.xmin !== this.lastExtent.xmin &&
+            this.view.extent.ymin !== this.lastExtent.ymin &&
+            this.view.extent.xmax !== this.lastExtent.xmax &&
+            this.view.extent.ymax !== this.lastExtent.ymax )
+            ) {
+        this.nextQueue = [];
+      }
     }
   }
 
   private _addClickListeners() {
-    console.log("_addClickListeners");
     let previousExtent = document.getElementById("previousExtent");
     let nextExtent = document.getElementById("nextExtent");
     if (previousExtent) {
-      console.log("previous extent listner added.")
       previousExtent.addEventListener("click", () => {
         this.gotoPreviousExtent();
       });
-    } else {
-      console.log ("previousExtent must be undefined: ", previousExtent);
     }
 
     if (nextExtent) {
       nextExtent.addEventListener("click", () => {
-        console.log("next extent listner added.")
         this.gotoNextExtent();
       });
     }
