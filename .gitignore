@@ -4,3 +4,4 @@ dist
 *.old
 dfwlogo_notext.svg
 debug.tsx
+package-lock.json
